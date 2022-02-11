@@ -13,18 +13,22 @@ namespace ClipboardEx.Win32
 		public Clipboard(ClipboardFormat format = ClipboardFormat.ANY)
 		{
 			Format = ClipboardFormat.EMPTY;
+			Data = new Lazy<byte[]>(() => Array.Empty<byte>());
 
-			if (format != ClipboardFormat.ANY)
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 			{
-				if (!IsClipboardFormatAvailable(format))
+				if (format != ClipboardFormat.ANY)
+				{
+					if (!IsClipboardFormatAvailable(format))
+						return;
+				}
+
+				if (!OpenClipboard(IntPtr.Zero))
 					return;
+
+				Format = EnumClipboardFormats(ClipboardFormat.ANY);
+				Data = new Lazy<byte[]>(() => GetClipboardData(Format).GetBytes());
 			}
-
-			if (!OpenClipboard(IntPtr.Zero))
-				return;
-
-			Format = EnumClipboardFormats(ClipboardFormat.ANY);
-			Data = new Lazy<byte[]>(() => GetClipboardData(Format).GetBytes());
 		}
 
 		public string Text {
@@ -38,21 +42,27 @@ namespace ClipboardEx.Win32
 				return null;
 			}
 			set {
-				EmptyClipboard();
-				Format = ClipboardFormat.EMPTY;
-				Data = new Lazy<byte[]>(() => GetClipboardData(Format).GetBytes());
-
-				using (var ptr = new HGlobalPtr(Marshal.StringToHGlobalUni(value)))
+				if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
 				{
-					Format = ClipboardFormat.UNICODETEXT;
-					SetClipboardData(Format, ptr);
+					EmptyClipboard();
+					Format = ClipboardFormat.EMPTY;
+					Data = new Lazy<byte[]>(() => GetClipboardData(Format).GetBytes());
+
+					using (var ptr = new HGlobalPtr(Marshal.StringToHGlobalUni(value)))
+					{
+						Format = ClipboardFormat.UNICODETEXT;
+						SetClipboardData(Format, ptr);
+					}
 				}
 			}
 		}
 
 		public void Dispose()
 		{
-			CloseClipboard();
+			if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+			{
+				CloseClipboard();
+			}
 		}
 	}
 }
